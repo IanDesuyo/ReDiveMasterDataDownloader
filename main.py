@@ -99,7 +99,7 @@ def guess(endAfterSucess=True, maxTry=20):
     big, small = int(lastVer[:5]), int(lastVer[5:]) + 1
     tryCount = 0
     while tryCount < maxTry:
-        if main(f"{big:05d}{small:03d}"):
+        if main(f"{big:05d}1{small:02d}"):
             if endAfterSucess:
                 print("End guess")
                 break
