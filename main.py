@@ -96,7 +96,7 @@ def guess(endAfterSucess=True, maxTry=20):
         old_version = json.load(f)
     lastVer = old_version.get("TruthVersion")
     print(f"Last Version: {lastVer}\n")
-    big, small = int(lastVer[:5]), int(lastVer[5:]) + 1
+    big, small = int(lastVer[:5]), int(lastVer[6:]) + 1
     tryCount = 0
     while tryCount < maxTry:
         if main(f"{big:05d}1{small:02d}"):
