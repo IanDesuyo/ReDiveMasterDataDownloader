@@ -3,42 +3,44 @@ import os
 import shutil
 import hashlib
 import json
-from datetime import datetime
 import requests
 import unitypack
+import logging
+from logging.handlers import RotatingFileHandler
 
 script_dir = os.path.dirname(__file__)
 
-header = {"User-Agent": "Dalvik/2.1.0 (Linux; U; Android 10; Pixel 3 XL Build/QQ3A.200805.001)"}
+HEADER = {"User-Agent": "Dalvik/2.1.0 (Linux; U; Android 10; Pixel 3 XL Build/QQ3A.200805.001)"}
 
+GENERATE_DIFF = os.path.exists("./sqldiff.exe")
 
-def main(truthVersion: str = None):
+def get(truthVersion: str = None):
     if not truthVersion:
         truthVersion = input("TruthVersion: ")
 
     # Download the database if TruthVersion is exist
     r = requests.get(
         f"https://img-pc.so-net.tw/dl/Resources/{truthVersion}/Jpn/AssetBundles/Android/manifest/masterdata_assetmanifest",
-        headers=header,
+        headers=HEADER,
     )
 
     if r.status_code != 200:
-        print(f"TruthVersion {truthVersion} is not exist")
+        logging.info(f"TruthVersion {truthVersion} is not exist")
         return
-    print(f"TruthVersion {truthVersion} is exist")
+    logging.info(f"TruthVersion {truthVersion} is exist")
 
     filename, path, _, size, _ = r.text.split(",")
 
-    print(f"Downloading asset bundle ...")
-    r = requests.get(f"https://img-pc.so-net.tw/dl/pool/AssetBundles/{path[:2]}/{path}", headers=header)
+    logging.info(f"Downloading asset bundle ...")
+    r = requests.get(f"https://img-pc.so-net.tw/dl/pool/AssetBundles/{path[:2]}/{path}", headers=HEADER)
 
     if r.headers.get("Content-Length") != size:
-        print("Size is not same, but it may be fine")
+        logging.info("Size is not same, but it may be fine")
 
     with open(os.path.join(script_dir, "masterdata_master.unity3d"), "wb+") as f:
         f.write(r.content)
 
-    masterDB = None
+    master_db = None
     # Unpack asset bundle
     with open("masterdata_master.unity3d", "rb") as f:
         bundle = unitypack.load(f)
@@ -47,69 +49,73 @@ def main(truthVersion: str = None):
             for id, object in asset.objects.items():
                 if object.type == "TextAsset":
                     data = object.read()
-                    masterDB = data.script
+                    master_db = data.script
                     break
 
     os.remove(os.path.join(script_dir, "masterdata_master.unity3d"))
     
     # Compress
-    print("Compressing redive_tw.db.br ...")
-    brotliDB = brotli.compress(masterDB)
+    logging.info("Compressing redive_tw.db.br ...")
+    brotli_db = brotli.compress(master_db)
 
     # Hash Check
-    print("Generating MD5 Hash ...")
-    new_hash = hashlib.md5(brotliDB).hexdigest()
+    logging.info("Generating MD5 Hash ...")
+    new_hash = hashlib.md5(brotli_db).hexdigest()
     with open(os.path.join(script_dir, "out/version.json")) as f:
         old_version = json.load(f)
 
     if old_version.get("hash") == new_hash:
-        print("Database Hash are same, Return")
+        logging.warning("Database Hashes are same")
         return
-    print(f"Old Hash: {old_version.get('hash')} ({old_version.get('TruthVersion')})")
-    print(f"New Hash: {new_hash} ({truthVersion})")
+    logging.info(f"Old Hash: {old_version.get('hash')} ({old_version.get('TruthVersion')})")
+    logging.info(f"New Hash: {new_hash} ({truthVersion})")
 
     # Save
     shutil.copyfile(os.path.join(script_dir, "out/redive_tw.db"), os.path.join(script_dir, "out/prev.redive_tw.db"))
 
     with open(os.path.join(script_dir, "out/redive_tw.db.br"), "wb") as f:
-        f.write(brotliDB)
+        f.write(brotli_db)
 
     with open(os.path.join(script_dir, "out/redive_tw.db"), "wb") as f:
-        f.write(masterDB)
+        f.write(master_db)
 
     with open(os.path.join(script_dir, "out/version.json"), "w") as f:
         json.dump({"TruthVersion": truthVersion, "hash": new_hash}, f)
         
     # Diff Check
-    print("Generating diff report ...")
-    os.system(
-        f"{os.path.join(script_dir, 'sqldiff.exe')} {os.path.join(script_dir, 'out/prev.redive_tw.db')} {os.path.join(script_dir, 'out/redive_tw.db')} > {os.path.join(script_dir, f'out/diff/{truthVersion}.sql')}"
-    )
+    if GENERATE_DIFF:
+        logging.info("Generating diff report ...")
+        os.system(
+            f"{os.path.join(script_dir, 'sqldiff.exe')} {os.path.join(script_dir, 'out/prev.redive_tw.db')} {os.path.join(script_dir, 'out/redive_tw.db')} > {os.path.join(script_dir, f'out/diff/{truthVersion}.sql')}"
+        )
 
-    print("Done\n")
+    logging.info("Done")
     return True
 
 
-def guess(endAfterSucess=True, maxTry=20):
-    print("Start guess TruthVersion")
+def guess(end_after_sucess=True, max_try=20):
+    logging.info("Start guessing TruthVersion")
     with open(os.path.join(script_dir, "out/version.json")) as f:
         old_version = json.load(f)
     lastVer = old_version.get("TruthVersion")
-    print(f"Last Version: {lastVer}\n")
+    logging.info(f"Last Version: {lastVer}")
     big, small = int(lastVer[:5]), int(lastVer[6:]) + 1
-    tryCount = 0
-    while tryCount < maxTry:
-        if main(f"{big:05d}1{small:02d}"):
-            if endAfterSucess:
-                print("End guess")
+    try_count = 0
+    while try_count < max_try:
+        if get(f"{big:05d}0{small:02d}"):
+            if end_after_sucess:
+                logging.info("End guess")
                 break
         if small >= 20:
             big += 1
             small = 0
         else:
             small += 1
-        tryCount += 1
+        try_count += 1
 
 
 if __name__ == "__main__":
-    guess(endAfterSucess=False)
+    FORMAT = "%(asctime)s %(levelname)s: %(message)s"
+    logging.basicConfig(level=logging.INFO, format=FORMAT, handlers=[RotatingFileHandler("log", maxBytes=1*1024*1024), logging.StreamHandler()])
+    
+    guess(end_after_sucess=False)
