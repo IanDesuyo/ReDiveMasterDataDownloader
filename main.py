@@ -12,7 +12,7 @@ script_dir = os.path.dirname(__file__)
 
 HEADER = {"User-Agent": "Dalvik/2.1.0 (Linux; U; Android 10; Pixel 3 XL Build/QQ3A.200805.001)"}
 
-GENERATE_DIFF = os.path.exists("./sqldiff.exe")
+GENERATE_DIFF = os.path.exists(os.path.join(script_dir, "sqldiff.exe"))
 
 def get(truthVersion: str = None):
     if not truthVersion:
@@ -42,7 +42,7 @@ def get(truthVersion: str = None):
 
     master_db = None
     # Unpack asset bundle
-    with open("masterdata_master.unity3d", "rb") as f:
+    with open(os.path.join(script_dir, "masterdata_master.unity3d"), "rb") as f:
         bundle = unitypack.load(f)
 
         for asset in bundle.assets:
@@ -116,6 +116,6 @@ def guess(end_after_sucess=True, max_try=20):
 
 if __name__ == "__main__":
     FORMAT = "%(asctime)s %(levelname)s: %(message)s"
-    logging.basicConfig(level=logging.INFO, format=FORMAT, handlers=[RotatingFileHandler("log", maxBytes=1*1024*1024), logging.StreamHandler()])
+    logging.basicConfig(level=logging.INFO, format=FORMAT, handlers=[RotatingFileHandler(os.path.join(script_dir, "log"), maxBytes=1*1024*1024), logging.StreamHandler()])
     
     guess(end_after_sucess=False)
